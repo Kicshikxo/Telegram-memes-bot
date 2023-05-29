@@ -1,0 +1,48 @@
+generator client {
+    provider = "prisma-client-js"
+    output   = "./client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("MEMES_BOT_DATABASE_URL")
+}
+
+model User {
+    id       String  @id @map("user_id")
+    username String? @unique @map("username")
+
+    role  Role   @default(MEME_UPLOADER)
+    memes Meme[]
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+    @@map("users")
+}
+
+model Meme {
+    id     String  @id @default(dbgenerated("gen_random_uuid()")) @map("meme_id") @db.Uuid
+    user   User?   @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: SetNull)
+    userId String? @map("user_id")
+
+    link   String     @map("link")
+    status MemeStatus @default(UPLOADED) @map("status")
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+    @@map("memes")
+}
+
+enum Role {
+    MEME_MANAGER
+    MEME_UPLOADER
+}
+
+enum MemeStatus {
+    UPLOADED
+    APPROVED
+    REJECTED
+    POSTED
+}
