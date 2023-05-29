@@ -158,7 +158,7 @@ export class BotService {
                               memes.find(({ status }) => status === MemeStatus.POSTED)?._count._all ?? 0
                           }*`
                         : ''
-                }\n\nДата присоединения: *${user.createdAt.toLocaleString()}*`,
+                }\n\nДата присоединения: *${user.createdAt.toLocaleString('ru')}*`,
                 {
                     parse_mode: 'Markdown',
                     ...Markup.keyboard([
@@ -311,7 +311,7 @@ export class BotService {
                 {
                     caption: `Прислал: <b>${
                         meme.user?.username ?? '<s>Удалённыё аккаунт</s>'
-                    }</b>\n\nЗагружен: <b>${meme.createdAt.toLocaleString()}</b>`,
+                    }</b>\n\nЗагружен: <b>${meme.createdAt.toLocaleString('ru')}</b>`,
                     parse_mode: 'HTML',
                     ...Markup.keyboard([
                         [Action.APPROVE_MEME, Action.SKIP_MEME, Action.REJECT_MEME],
