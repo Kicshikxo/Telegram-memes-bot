@@ -26,6 +26,7 @@ enum Action {
 
     SKIP = 'Пропустить',
 
+    UPDATE_MENU = 'Обновить',
     EXIT_TO_MENU = 'Выйти в меню'
 }
 
@@ -117,19 +118,14 @@ export class BotService {
 
     async initScenes() {
         // Menu Scene
-
-        this.menuScene.enter(async (ctx) => {
+        const getUserInfo = async (ctx: Scenes.SceneContext) => {
             if (!ctx.from) return
 
             const user = await this.prismaService.user.findUnique({
-                where: { id: ctx.from.id.toString() },
-                include: {
-                    _count: { select: { memes: true } }
-                }
+                where: { id: ctx.from.id.toString() }
             })
 
             if (!user?.username) {
-                await ctx.scene.enter(Scene.INIT)
                 return
             }
 
@@ -140,36 +136,85 @@ export class BotService {
                 }
             })
 
-            await ctx.reply(
-                `Ваше имя пользователя: *${user.username}*\nВаша роль: *${
-                    user.role === Role.MEME_UPLOADER ? 'Кидатель мемов' : 'Просмотрщик мемов'
-                }*\n\nМемов загружено вами: *${user._count.memes}*${
-                    user.role === Role.MEME_MANAGER
-                        ? `\n\nМемов загружено всего: *${memes.reduce(
-                              (acc, value) => (acc += value?._count._all),
-                              0
-                          )}*\nМемов не просмотренно: *${
-                              memes.find(({ status }) => status === MemeStatus.UPLOADED)?._count._all ?? 0
-                          }*\nМемов одобрено: *${
-                              memes.find(({ status }) => status === MemeStatus.APPROVED)?._count._all ?? 0
-                          }*\nМемов отклонено: *${
-                              memes.find(({ status }) => status === MemeStatus.REJECTED)?._count._all ?? 0
-                          }*\nМемов опубликовано: *${
-                              memes.find(({ status }) => status === MemeStatus.POSTED)?._count._all ?? 0
-                          }*`
-                        : ''
-                }\n\nДата присоединения: *${user.createdAt.toLocaleString('ru')}*`,
-                {
-                    parse_mode: 'Markdown',
-                    ...Markup.keyboard([
-                        [Action.CHANGE_USERNAME, Action.UPLOAD_MEMES],
-                        [
-                            ...(user?.role === Role.MEME_MANAGER ? [Action.VIEW_MEMES] : []),
-                            ...(user?.role === Role.MEME_MANAGER ? [Action.POST_MEMES] : [])
-                        ]
-                    ]).resize()
+            const userMemes = await this.prismaService.meme.groupBy({
+                where: { userId: ctx.from.id.toString() },
+                by: ['status'],
+                _count: {
+                    _all: true
                 }
+            })
+
+            return (
+                `Ваше имя пользователя: *${user.username}*\n` +
+                `Ваша роль: *${user.role === Role.MEME_UPLOADER ? 'Кидатель мемов' : 'Просмотрщик мемов'}*\n\n` +
+                `Мемов загружено вами: *${userMemes.reduce((acc, value) => (acc += value?._count._all), 0)}*\n\n` +
+                (user.role === Role.MEME_MANAGER
+                    ? `Мемов загружено всего: *${memes.reduce(
+                          (acc, value) => (acc += value?._count._all),
+                          0
+                      )}*\nМемов не просмотренно: *${
+                          memes.find(({ status }) => status === MemeStatus.UPLOADED)?._count._all ?? 0
+                      }*\nМемов одобрено: *${
+                          memes.find(({ status }) => status === MemeStatus.APPROVED)?._count._all ?? 0
+                      }*\nМемов отклонено: *${
+                          memes.find(({ status }) => status === MemeStatus.REJECTED)?._count._all ?? 0
+                      }*\nМемов опубликовано: *${memes.find(({ status }) => status === MemeStatus.POSTED)?._count._all ?? 0}*`
+                    : `Мемов отклонено: ${
+                          userMemes.find(({ status }) => status === MemeStatus.REJECTED)?._count._all ?? 0
+                      }\nМемов одобрено/опубликованно: ${
+                          (userMemes.find(({ status }) => status === MemeStatus.APPROVED)?._count._all ?? 0) +
+                          (userMemes.find(({ status }) => status === MemeStatus.POSTED)?._count._all ?? 0)
+                      }`) +
+                `\n\nДата присоединения: *${user.createdAt.toLocaleString('ru')}*`
             )
+        }
+        this.menuScene.enter(async (ctx) => {
+            if (!ctx.from) return
+
+            const user = await this.prismaService.user.findUnique({
+                where: { id: ctx.from.id.toString() }
+            })
+            if (!user?.username) {
+                await ctx.scene.enter(Scene.INIT)
+                return
+            }
+
+            const userInfo = await getUserInfo(ctx)
+            if (!userInfo) {
+                await ctx.scene.enter(Scene.INIT)
+                return
+            }
+
+            await ctx.reply(userInfo, {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([[{ text: Action.UPDATE_MENU, callback_data: Action.UPDATE_MENU }]])
+            })
+            await ctx.reply(
+                'Для действий используйте кнопки ниже',
+                Markup.keyboard([
+                    [Action.CHANGE_USERNAME, Action.UPLOAD_MEMES],
+                    [
+                        ...(user?.role === Role.MEME_MANAGER ? [Action.VIEW_MEMES] : []),
+                        ...(user?.role === Role.MEME_MANAGER ? [Action.POST_MEMES] : [])
+                    ]
+                ]).resize()
+            )
+        })
+        //
+        this.menuScene.action(Action.UPDATE_MENU, async (ctx) => {
+            const userInfo = await getUserInfo(ctx)
+            if (!userInfo) {
+                return
+            }
+
+            try {
+                await ctx.editMessageText(userInfo, {
+                    parse_mode: 'Markdown',
+                    ...Markup.inlineKeyboard([[{ text: Action.UPDATE_MENU, callback_data: Action.UPDATE_MENU }]])
+                })
+            } catch (e) {}
+
+            await ctx.answerCbQuery()
         })
         //
         this.menuScene.hears(Action.CHANGE_USERNAME, async (ctx) => {
@@ -310,7 +355,7 @@ export class BotService {
                 { url: meme.link },
                 {
                     caption: `Прислал: <b>${
-                        meme.user?.username ?? '<s>Удалённыё аккаунт</s>'
+                        meme.user?.username ?? '<s>Удалённый аккаунт</s>'
                     }</b>\n\nЗагружен: <b>${meme.createdAt.toLocaleString('ru')}</b>`,
                     parse_mode: 'HTML',
                     ...Markup.keyboard([
@@ -375,7 +420,10 @@ export class BotService {
                 return
             }
 
-            const memes = await this.prismaService.meme.findMany({ where: { status: MemeStatus.APPROVED } })
+            const memes = await this.prismaService.meme.findMany({
+                where: { status: MemeStatus.APPROVED },
+                include: { user: true }
+            })
 
             if (!memes.length) {
                 await ctx.reply('Нет одобренных мемов', Markup.keyboard([[Action.EXIT_TO_MENU]]).resize())
@@ -387,8 +435,14 @@ export class BotService {
                 Markup.keyboard([[Action.POST_MEMES, PostMemesAction.DISAPPROVE_MEMES], [Action.EXIT_TO_MENU]]).resize()
             )
             for (let part = 0; part < Math.ceil(memes.length / 10); part++) {
+                const memesPart = memes.slice(part * 10, 10 + part * 10)
                 await ctx.replyWithMediaGroup(
-                    memes.slice(part * 10, 10 + part * 10).map((meme) => ({ type: 'photo', media: { url: meme.link } }))
+                    memesPart.map((meme) => ({
+                        type: 'photo',
+                        media: { url: meme.link },
+                        caption: `Мем от: ${meme.user?.username ?? '<s>Удалённый аккаунт</s>'}`,
+                        parse_mode: 'HTML'
+                    }))
                 )
             }
         })
@@ -399,16 +453,25 @@ export class BotService {
             })
         })
         this.postMemesScene.hears(PostMemesAction.CONFIRM_POST, async (ctx) => {
-            const memes = await this.prismaService.meme.findMany({ where: { status: MemeStatus.APPROVED } })
+            const memes = await this.prismaService.meme.findMany({
+                where: { status: MemeStatus.APPROVED },
+                include: { user: true }
+            })
 
             try {
                 const channelId = this.configService.get('MEMES_BOT_CHANNEL_ID')
                 if (!channelId) throw new ReferenceError('MEMES_BOT_CHANNEL_ID environment variable is not provided')
 
                 for (let part = 0; part < Math.ceil(memes.length / 10); part++) {
+                    const memesPart = memes.slice(part * 10, 10 + part * 10)
                     await ctx.telegram.sendMediaGroup(
                         channelId,
-                        memes.slice(part * 10, 10 + part * 10).map((meme) => ({ type: 'photo', media: { url: meme.link } }))
+                        memesPart.map((meme) => ({
+                            type: 'photo',
+                            media: { url: meme.link },
+                            caption: `Мем от: ${meme.user?.username ?? '<s>Удалённый аккаунт</s>'}`,
+                            parse_mode: 'HTML'
+                        }))
                     )
                 }
             } catch (e) {
