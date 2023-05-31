@@ -288,8 +288,6 @@ export class BotService {
         this.uploadMemesScene.on('photo', async (ctx) => {
             if (!ctx.from) return
 
-            const user = await this.prismaService.user.findUnique({ where: { id: ctx.from.id.toString() } })
-
             const fileId = ctx.message.photo.at(-1)?.file_id
             if (!fileId) return
 
@@ -298,7 +296,7 @@ export class BotService {
                 data: {
                     userId: ctx.from.id.toString(),
                     link: link,
-                    status: user?.role === Role.MEME_MANAGER ? MemeStatus.APPROVED : MemeStatus.UPLOADED
+                    status: MemeStatus.UPLOADED
                 }
             })
             await ctx.reply('Мем успешно загружен')
