@@ -348,6 +348,8 @@ export class BotService {
         })
         //
         const viewMeme = async (ctx: Scenes.SceneContext) => {
+            if (!ctx.from) return
+
             const state = ctx.scene.state as SceneState
 
             const memes = await this.prismaService.meme.findMany({
@@ -364,14 +366,16 @@ export class BotService {
                 return
             }
 
+            const telegramUser = await ctx.getChatMember(ctx.from.id)
+
             state.viewedMemeId = meme.id
 
             await ctx[meme.type === MemeType.video ? 'replyWithVideo' : 'replyWithPhoto'](
                 { url: (await ctx.telegram.getFileLink(meme.fileId)).href },
                 {
-                    caption: `Прислал: <b>${
-                        meme.user?.username ?? '<s>Удалённый аккаунт</s>'
-                    }</b>\n\nЗагружен: <b>${meme.createdAt.toLocaleString('ru')}</b>`,
+                    caption: `Прислал: <b>${meme.user?.username ?? '<s>Удалённый аккаунт</s>'}</b>${
+                        telegramUser.user.username ? ` (<u>@${telegramUser.user.username}</u>)` : ''
+                    }\n\nЗагружен: <b>${meme.createdAt.toLocaleString('ru')}</b>`,
                     parse_mode: 'HTML',
                     ...Markup.keyboard([
                         [Action.APPROVE_MEME, Action.SKIP_MEME, Action.REJECT_MEME],
