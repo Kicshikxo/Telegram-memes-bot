@@ -448,8 +448,7 @@ export class BotService {
             await ctx.reply(
                 'Выберите действие из кнопок ниже',
                 Markup.keyboard([
-                    [Action.PREVIEW_POST],
-                    [Action.POST_MEMES, PostMemesAction.DISAPPROVE_MEMES],
+                    [Action.PREVIEW_POST, Action.POST_MEMES, PostMemesAction.DISAPPROVE_MEMES],
                     [Action.EXIT_TO_MENU]
                 ]).resize()
             )
