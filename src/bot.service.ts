@@ -366,7 +366,7 @@ export class BotService {
                 return
             }
 
-            const telegramUser = await ctx.getChatMember(ctx.from.id)
+            const telegramUser = await ctx.getChatMember(Number(meme.userId))
 
             state.viewedMemeId = meme.id
 
