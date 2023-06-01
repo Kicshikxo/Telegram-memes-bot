@@ -26,7 +26,8 @@ model Meme {
     user   User?   @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: SetNull)
     userId String? @map("user_id")
 
-    link   String     @map("link")
+    type   MemeType   @map("meme_type")
+    fileId String     @map("file_id")
     status MemeStatus @default(UPLOADED) @map("status")
 
     createdAt DateTime @default(now()) @map("created_at")
@@ -45,4 +46,9 @@ enum MemeStatus {
     APPROVED
     REJECTED
     POSTED
+}
+
+enum MemeType {
+    photo
+    video
 }
