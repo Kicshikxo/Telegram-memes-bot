@@ -366,7 +366,11 @@ export class BotService {
                 return
             }
 
-            const telegramUser = await ctx.getChatMember(Number(meme.userId))
+            const telegramUser: any = await (async () => {
+                try {
+                    return await ctx.telegram.getChat(Number(meme.userId))
+                } catch (e) {}
+            })()
 
             state.viewedMemeId = meme.id
 
@@ -374,7 +378,7 @@ export class BotService {
                 { url: (await ctx.telegram.getFileLink(meme.fileId)).href },
                 {
                     caption: `Прислал: <b>${meme.user?.username ?? '<s>Удалённый аккаунт</s>'}</b>${
-                        telegramUser.user.username ? ` (<u>@${telegramUser.user.username}</u>)` : ''
+                        telegramUser?.username ? ` (<u>@${telegramUser?.username}</u>)` : ''
                     }\n\nЗагружен: <b>${meme.createdAt.toLocaleString('ru')}</b>`,
                     parse_mode: 'HTML',
                     ...Markup.keyboard([
