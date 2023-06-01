@@ -202,7 +202,7 @@ export class BotService {
             )
         })
         //
-        this.menuScene.action(Action.UPDATE_MENU, async (ctx) => {
+        this.bot.action(Action.UPDATE_MENU, async (ctx) => {
             const userInfo = await getUserInfo(ctx)
             if (!userInfo) {
                 return
