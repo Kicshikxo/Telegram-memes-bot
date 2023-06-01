@@ -26,7 +26,7 @@ model Meme {
     user   User?   @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: SetNull)
     userId String? @map("user_id")
 
-    type   MemeType   @map("meme_type")
+    type   MemeType   @map("media_type")
     fileId String     @map("file_id")
     status MemeStatus @default(UPLOADED) @map("status")
 
