@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Markup, Scenes, Telegraf, session } from 'telegraf'
-import { MemeStatus, Role } from './prisma/client'
+import { MemeStatus, MemeType, Role } from './prisma/client'
 import { PrismaService } from './prisma/prisma.service'
 
 enum Scene {
@@ -19,6 +19,7 @@ enum Action {
 
     VIEW_MEMES = 'Посмотреть мемы',
     POST_MEMES = 'Опубликовать мемы',
+    PREVIEW_POST = 'Предпросмотр поста(ов)',
 
     APPROVE_MEME = 'Одобрить мем',
     SKIP_MEME = 'Пропустить мем',
@@ -280,7 +281,7 @@ export class BotService {
 
         this.uploadMemesScene.enter(async (ctx) => {
             await ctx.reply(
-                'Для загрузки мема отправьте мне его в виде изображения',
+                'Для загрузки мема отправьте мне его в виде изображения или видео',
                 Markup.keyboard([[Action.EXIT_TO_MENU]]).resize()
             )
         })
@@ -291,17 +292,33 @@ export class BotService {
             const fileId = ctx.message.photo.at(-1)?.file_id
             if (!fileId) return
 
-            const { href: link } = await this.bot.telegram.getFileLink(fileId)
             await this.prismaService.meme.create({
                 data: {
                     userId: ctx.from.id.toString(),
-                    link: link,
-                    status: MemeStatus.UPLOADED
+                    type: MemeType.photo,
+                    fileId: fileId
                 }
             })
-            await ctx.reply('Мем успешно загружен')
+            await ctx.reply('Изображение успешно загружено')
             await ctx.reply('Можете загрузить ещё или выйти в меню', Markup.keyboard([[Action.EXIT_TO_MENU]]).resize())
         })
+        this.uploadMemesScene.on('video', async (ctx) => {
+            if (!ctx.from) return
+
+            const fileId = ctx.message.video.file_id
+            if (!fileId) return
+
+            await this.prismaService.meme.create({
+                data: {
+                    userId: ctx.from.id.toString(),
+                    type: MemeType.video,
+                    fileId: fileId
+                }
+            })
+            await ctx.reply('Видео успешно загружено')
+            await ctx.reply('Можете загрузить ещё или выйти в меню', Markup.keyboard([[Action.EXIT_TO_MENU]]).resize())
+        })
+        //
         this.uploadMemesScene.hears(Action.EXIT_TO_MENU, async (ctx) => {
             await ctx.scene.enter(Scene.MENU)
         })
@@ -349,8 +366,8 @@ export class BotService {
 
             state.viewedMemeId = meme.id
 
-            await ctx.replyWithPhoto(
-                { url: meme.link },
+            await ctx[meme.type === MemeType.video ? 'replyWithVideo' : 'replyWithPhoto'](
+                { url: (await ctx.telegram.getFileLink(meme.fileId)).href },
                 {
                     caption: `Прислал: <b>${
                         meme.user?.username ?? '<s>Удалённый аккаунт</s>'
@@ -429,18 +446,38 @@ export class BotService {
             }
 
             await ctx.reply(
-                'Предпросмотр поста(ов):',
-                Markup.keyboard([[Action.POST_MEMES, PostMemesAction.DISAPPROVE_MEMES], [Action.EXIT_TO_MENU]]).resize()
+                'Выберите действие из кнопок ниже',
+                Markup.keyboard([
+                    [Action.PREVIEW_POST],
+                    [Action.POST_MEMES, PostMemesAction.DISAPPROVE_MEMES],
+                    [Action.EXIT_TO_MENU]
+                ]).resize()
             )
+        })
+        this.postMemesScene.hears(Action.PREVIEW_POST, async (ctx) => {
+            const memes = await this.prismaService.meme.findMany({
+                where: { status: MemeStatus.APPROVED },
+                include: { user: true }
+            })
+
+            if (!memes.length) {
+                await ctx.reply('Нет одобренных мемов', Markup.keyboard([[Action.EXIT_TO_MENU]]).resize())
+                return
+            }
+
+            await ctx.reply('Предпросмотр поста(ов):')
+
             for (let part = 0; part < Math.ceil(memes.length / 10); part++) {
                 const memesPart = memes.slice(part * 10, 10 + part * 10)
                 await ctx.replyWithMediaGroup(
-                    memesPart.map((meme) => ({
-                        type: 'photo',
-                        media: { url: meme.link },
-                        caption: `Мем от: ${meme.user?.username ?? '<s>Удалённый аккаунт</s>'}`,
-                        parse_mode: 'HTML'
-                    }))
+                    await Promise.all(
+                        memesPart.map(async (meme) => ({
+                            type: meme.type,
+                            media: { url: (await ctx.telegram.getFileLink(meme.fileId)).href },
+                            caption: `Мем от: ${meme.user?.username ?? '<s>Удалённый аккаунт</s>'}`,
+                            parse_mode: 'HTML'
+                        }))
+                    )
                 )
             }
         })
@@ -464,12 +501,14 @@ export class BotService {
                     const memesPart = memes.slice(part * 10, 10 + part * 10)
                     await ctx.telegram.sendMediaGroup(
                         channelId,
-                        memesPart.map((meme) => ({
-                            type: 'photo',
-                            media: { url: meme.link },
-                            caption: `Мем от: ${meme.user?.username ?? '<s>Удалённый аккаунт</s>'}`,
-                            parse_mode: 'HTML'
-                        }))
+                        await Promise.all(
+                            memesPart.map(async (meme) => ({
+                                type: meme.type,
+                                media: { url: (await ctx.telegram.getFileLink(meme.fileId)).href },
+                                caption: `Мем от: ${meme.user?.username ?? '<s>Удалённый аккаунт</s>'}`,
+                                parse_mode: 'HTML'
+                            }))
+                        )
                     )
                 }
             } catch (e) {
