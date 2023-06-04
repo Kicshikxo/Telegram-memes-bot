@@ -355,7 +355,7 @@ export class BotService {
             const memes = await this.prismaService.meme.findMany({
                 where: { id: { notIn: state.skippedMemesId }, status: MemeStatus.UPLOADED },
                 include: { user: true },
-                orderBy: { createdAt: 'desc' },
+                orderBy: { createdAt: state.memeViewType === MemeViewType.OLDEST ? 'asc' : 'desc' },
                 take: state.memeViewType === MemeViewType.RANDOM ? undefined : 1
             })
 
