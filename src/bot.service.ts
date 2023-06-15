@@ -299,8 +299,7 @@ export class BotService {
                     fileId: fileId
                 }
             })
-            await ctx.reply('Изображение успешно загружено')
-            await ctx.reply('Можете загрузить ещё или выйти в меню', Markup.keyboard([[Action.EXIT_TO_MENU]]).resize())
+            await ctx.reply('Изображение успешно загружено', Markup.keyboard([[Action.EXIT_TO_MENU]]).resize())
         })
         this.uploadMemesScene.on('video', async (ctx) => {
             if (!ctx.from) return
@@ -315,8 +314,7 @@ export class BotService {
                     fileId: fileId
                 }
             })
-            await ctx.reply('Видео успешно загружено')
-            await ctx.reply('Можете загрузить ещё или выйти в меню', Markup.keyboard([[Action.EXIT_TO_MENU]]).resize())
+            await ctx.reply('Видео успешно загружено', Markup.keyboard([[Action.EXIT_TO_MENU]]).resize())
         })
         //
         this.uploadMemesScene.hears(Action.EXIT_TO_MENU, async (ctx) => {
